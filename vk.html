@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+    <meta name="keywords" content="Codaline, Codaline.Courses, The way to change the world, Шлях змінити світ">
+    <title>VK</title>
+    <link type="text/css" rel="stylesheet" href="../codaline-testing-module/css/bootstrap-dialog.min.css"/>
+    <link type="text/css" rel="stylesheet" href="../codaline-testing-module/css/bootstrap.min.css"/>
+    <link type="text/css" rel="stylesheet" href="../codaline-testing-module/css/codaline.theme.css"/>
+    <script type="application/javascript" src="../codaline-testing-module/js/jquery-2.1.1.js"></script>
+
+    <script type="text/javascript" src="//vk.com/js/api/openapi.js?124"></script>
+    <script type="text/javascript">
+        VK.init({apiId: 5559075});
+    </script>
+    <style>
+        * {
+            border-radius: 0;
+        }
+
+        #vk_auth {
+            margin: 0 auto;
+        }
+
+        .col-md-12 a, .col-md-12 span {
+            margin-left: 15px;
+            font-size: 20px;
+            color: #19aa8d;
+        }
+
+        .col-md-3 a {
+            border: 1px solid #19aa8d;
+            padding: 3px;
+            height: 58px;
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        img {
+            margin-right: 7px;
+        }
+
+        span {
+            font-size: 16px;
+            color: #19aa8d;
+        }
+
+        i {
+            font-size: 16px;
+            color: rgba(25, 170, 141, 0.5);
+            cursor: pointer;
+            right: 20px;
+            top: 8px !important;
+            position: absolute !important;
+        }
+
+        i:hover {
+            color: rgba(25, 170, 141, 1);
+        }
+
+        input, button {
+            height: 51px !important;
+            border-radius: 0 !important;
+        }
+    </style>
+</head>
+<body>
+<div class="container mar-ver-50">
+    <div id="vk_auth"></div>
+    <div id="friends_list" style="display: none" class="row"></div>
+</div>
+
+<script type="text/javascript">
+    var storage = localStorage;
+    var user = JSON.parse(storage.getItem("user")) || {};
+    var list = {};
+
+    if (!user.name) {
+        VK.Widgets.Auth(
+                "vk_auth",
+                {
+                    redesign: 1,
+                    width: "360px",
+                    onAuth: function (data) {
+                        user = {
+                            "name": data.first_name + " " + data.last_name,
+                            "photo": data.photo_rec,
+                            "id": data.uid
+                        };
+                        init();
+                        storage.setItem("user", JSON.stringify(user));
+                    }
+                }
+        );
+    } else {
+        init()
+    }
+
+    function init() {
+        $("#friends_list").html("");
+        $("#friends_list")
+                .append(
+                        $("<div>", {class: "col-md-12 text-right mar-bottom-20"})
+                                .append($("<img>", {src: user.photo, height: "50"}))
+                                .append($("<span>", {text: user.name}))
+                                .append($("<a>", {href: "#", onclick: "init()", text: "Оновити список друзів"}))
+                                .append($("<a>", {href: "#", onclick: "exit()", text: "Вийти"}))
+                );
+        updateFriendsList();
+    }
+
+    function updateFriendsList() {
+        var key = "user" + user.id;
+        var stored = JSON.parse(storage.getItem(key)) || {};
+
+        VK.Api.call('friends.get', {
+            user_id: user.id,
+            order: "hints",
+            fields: "domain,photo_50",
+            version: 5.53
+        }, function (r) {
+            var friends = r.response;
+            for (var i = 0; i < friends.length; i++) {
+                var id = friends[i].uid;
+                list[id] = stored[id] || {
+                            "id": id,
+                            "name": friends[i].first_name + " " + friends[i].last_name,
+                            "photo": friends[i].photo_50
+                        };
+                var img = $("<img>", {src: list[id].photo});
+                var name = $("<span>", {text: list[id].name});
+                var edit = $("<i>", {id: "edit" + id, class: "pull-right glyphicon glyphicon-pencil"});
+                var link = $("<a>", {id: id});
+                link.append(img);
+                link.append(name);
+                link.append(edit);
+                $("#friends_list").append($("<div>", {class: "col-md-3"}).append(link));
+            }
+            storage.setItem(key, JSON.stringify(list));
+            $("#vk_auth").hide();
+            $("#friends_list").show();
+            initEdit();
+        });
+        return false;
+    }
+
+    function initEdit() {
+        $("i").on("click", function () {
+            var $this = $(this);
+            $this.hide();
+            var uid = $this.attr("id").replace("edit", "");
+            console.log(uid);
+            var inputGroup = $("<div>", {class: "input-group", id: "field" + uid})
+                    .append($("<input>", {class: "form-control", type: "text", value: list[uid].name}))
+                    .append($("<span>", {class: "input-group-btn"})
+                            .append($("<button>", {
+                                class: "btn btn-default",
+                                id: "save" + uid,
+                                onclick: "saveName(" + uid + ")"
+                            }).append($("<b>", {class: "glyphicon glyphicon-ok"}))));
+            $this = $("#" + uid);
+            $this.find("span").hide();
+            $this.find("img").hide();
+            $this.append(inputGroup)
+        });
+    }
+
+    function saveName(uid) {
+        var field = $("#field" + uid);
+        list[uid].name = field.find("input").val();
+        field.remove();
+        var friend = $("#" + uid);
+        friend.find("span").html(list[uid].name);
+        friend.find("span").show();
+        friend.find("img").show();
+        friend.find("i").show();
+        storage.setItem("user" + user.id, JSON.stringify(list))
+    }
+
+    function exit() {
+        storage.removeItem("user");
+        location.reload();
+        return false;
+    }
+</script>
+</body>
+</html>
